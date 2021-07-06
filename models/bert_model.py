@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import BertModel, BertTokenizer, BertConfig
 from transformers import RobertaModel, RobertaTokenizer, RobertaConfig
 from transformers.models.bert.modeling_bert import  BertPreTrainedModel, BertPredictionHeadTransform
-from transformers.models.roberta.modeling_roberta import  RobertaPreTrainedModel, RobertaPredictionHeadTransform
+from transformers.models.roberta.modeling_roberta import  RobertaPreTrainedModel
 
 class PredictionHead(nn.Module):
     '''
@@ -22,10 +22,7 @@ class PredictionHead(nn.Module):
     def __init__(self, config, num_labels, modeltype):
         super(PredictionHead, self).__init__()
         self.modeltype = modeltype
-        if self.modeltype=='bert':
-            self.transform = BertPredictionHeadTransform(config)
-        else:
-            self.transform = RobertaPredictionHeadTransform(config)
+        self.transform = BertPredictionHeadTransform(config)
         self.decoder = nn.Linear(config.hidden_size, num_labels)
         self.bias = nn.Parameter(torch.zeros(num_labels))
 

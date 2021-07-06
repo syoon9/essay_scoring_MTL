@@ -150,17 +150,19 @@ def main():
             args.logger.info("--model must be provided for training (['bert', 'roberta'])")
             return
 
-        config.training_objectives = training_objectives
-        config.max_score = args.max_score
         if args.model=='bert':
             tokenizer = BertTokenizer.from_pretrained(args.model_path, additional_special_tokens=args.special_tokens)
             config = BertConfig.from_pretrained(args.model_path)
             training_objectives = get_auxiliary_objectives(args, tokenizer.vocab_size)
+            config.max_score = args.max_score
+            config.training_objectives = training_objectives
             grader = bert_model.SpeechGraderModelBert(config=config, model_path=args.model_path).to(args.device)
         else:
             tokenizer = RobertaTokenizer.from_pretrained(args.model_path, additional_special_tokens=args.special_tokens)
             config = RobertaConfig.from_pretrained(args.model_path)
             training_objectives = get_auxiliary_objectives(args, tokenizer.vocab_size)
+            config.max_score = args.max_score
+            config.training_objectives = training_objectives
             grader = bert_model.SpeechGraderModelRoberta(config=config, model_path=args.model_path).to(args.device)
 
         train_data = data.load_and_cache_examples(

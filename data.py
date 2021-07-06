@@ -43,7 +43,7 @@ class InputExample(object):
             tokens: string. The tokenized text.
             pos_tags: (Optional) string. The part of speech tags, space separated aligned with tokens
             dep_rels: (Optional) string. The universal dependency relation labels, space separated aligned with tokens
-            native_language: (Optional) string. Native language of the speaker
+            native_language: (Optional) int. other aspect score
             score: float (for regression model). string (for classification model). Score that was assigned to the example.
         """
         self.id = id
@@ -56,9 +56,10 @@ class InputExample(object):
 class TSVProcessor(object):
     """Processor for TSV data set"""
 
-    def __init__(self, score_col_name):
+    def __init__(self, score_col_name, l1_col_name=None):
         object.__init__(self)
         self.score_col_name = score_col_name
+        self.l1_col_name = l1_col_name
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -87,7 +88,7 @@ class TSVProcessor(object):
             pos_tags = line[columns['TAG']].split(' ') if 'TAG' in columns else ['X'] * len(tokens)
             dep_rels = line[columns['deprel']].split(' ') if 'deprel' in columns else ['X'] * len(tokens)
             dep_rels = [dep_rel.split(':')[0] for dep_rel in dep_rels]
-            native_language = line[columns['l1']] if 'l1' in columns else 'X'
+            native_language = line[columns[self.l1_col_name]] if self.l1_col_name else -1
             score = line[columns[self.score_col_name]]
             examples.append(
                 InputExample(id=id, tokens=tokens, score=score, pos_tags=pos_tags,
@@ -110,7 +111,7 @@ class TSVProcessor(object):
 
 def convert_examples_to_features(examples, model, max_seq_length, special_tokens, logger,
                                  vocab=None, tokenizer=None, scoring_model_type='reg'):
-    special_tokens_count = 2 if model == 'bert' else 0
+    special_tokens_count = 2 if model in ['bert', 'roberta'] else 0
     pos_tag_label_map = {label: i for i, label in enumerate(pos_tag_labels)}
     dep_rel_label_map = {label: i for i, label in enumerate(deprel_labels)}
     native_language_label_map = {label: i for i, label in enumerate(native_language_labels)}
@@ -121,7 +122,7 @@ def convert_examples_to_features(examples, model, max_seq_length, special_tokens
     for (ex_index, example) in enumerate(examples):
         if ex_index % 10000 == 0:
             logger.info("Writing example %d of %d" % (ex_index, len(examples)))
-        tokens, pos_tags, dep_rels, native_language = [], [], [], []
+        tokens, pos_tags, dep_rels = [], [], []
         segment_ids = None
 
         for i, word in enumerate(example.tokens.split(' ')):
@@ -133,28 +134,22 @@ def convert_examples_to_features(examples, model, max_seq_length, special_tokens
             if word in special_tokens:
                 pos_tags.append(-1)
                 dep_rels.append(-1)
-                native_language.append(-1)
             else:
                 pos_tags.append(pos_tag_label_map.get(example.pos_tags[i], 0))
                 dep_rels.append(dep_rel_label_map.get(example.dep_rels[i], 0))
-                native_language.append(native_language_label_map.get(example.native_language, 0))
-                if model == 'bert':
-                    token_padding = [-1] * (len(word_pieces) - 1)
-                    pos_tags.extend(token_padding)
-                    dep_rels.extend(token_padding)
-                    native_language.extend(token_padding)
+                token_padding = [-1] * (len(word_pieces) - 1)
+                pos_tags.extend(token_padding)
+                dep_rels.extend(token_padding)
 
 
         if len(tokens) > max_seq_length - special_tokens_count:
             tokens = tokens[:(max_seq_length - special_tokens_count)]
             pos_tags = pos_tags[:(max_seq_length - special_tokens_count)]
             dep_rels = dep_rels[:(max_seq_length - special_tokens_count)]
-            native_language = native_language[:(max_seq_length - special_tokens_count)]
 
         input_ids = tokenizer.convert_tokens_to_ids([tokenizer.cls_token] + tokens + [tokenizer.sep_token])
         pos_tags = [-1] + pos_tags + [-1]
         dep_rels = [-1] + dep_rels + [-1]
-        native_language = [-1] + native_language + [-1]
         segment_ids = [0] * len(input_ids)
 
 
@@ -163,21 +158,19 @@ def convert_examples_to_features(examples, model, max_seq_length, special_tokens
         input_mask = [1] * len(input_ids)
         # Zero-pad up to the sequence length.
         example_padding = max_seq_length - len(input_ids)
-        input_ids = input_ids + ([tokenizer.pad_token_id if model == 'bert' else 0] * example_padding)
+        input_ids = input_ids + ([tokenizer.pad_token_id if model in ['bert', 'roberta'] else 0] * example_padding)
         input_mask = input_mask + ([0] * example_padding)
         pos_tags = pos_tags + ([-1] * example_padding)
         dep_rels = dep_rels + ([-1] * example_padding)
-        native_language = native_language + ([-1] * example_padding)
-        if model == 'bert':
-            segment_ids = segment_ids + ([0] * example_padding)
-            assert len(segment_ids) == max_seq_length
+        native_language = int(example.native_language)
+        segment_ids = segment_ids + ([0] * example_padding)
+        assert len(segment_ids) == max_seq_length
 
 
         assert len(input_ids) == max_seq_length
         assert len(input_mask) == max_seq_length
         assert len(pos_tags) == max_seq_length
         assert len(dep_rels) == max_seq_length
-        assert len(native_language) == max_seq_length
         
         if 'reg' in scoring_model_type:
             score = float(example.score)
@@ -191,7 +184,7 @@ def convert_examples_to_features(examples, model, max_seq_length, special_tokens
                     [str(x) for x in tokens]))
             logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
             logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-            if model == 'bert':
+            if model in ['bert', 'roberta']:
                 logger.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
             logger.info("score: %d)" % (score))
 
