@@ -56,7 +56,7 @@ class InputExample(object):
 class TSVProcessor(object):
     """Processor for TSV data set"""
 
-    def __init__(self, score_col_name, l1_col_name=None):
+    def __init__(self, score_col_name, l1_col_name):
         object.__init__(self)
         self.score_col_name = score_col_name
         self.l1_col_name = l1_col_name
@@ -96,7 +96,7 @@ class TSVProcessor(object):
         return examples
 
     @classmethod
-    def _read_tsv(cls, input_file, score_col_name, quotechar=None):
+    def _read_tsv(cls, input_file, score_col_name, l1_col_name=None, quotechar=None):
         print(input_file)
         print('score_col_name:', score_col_name)
         """Reads a tab separated value file."""
@@ -199,7 +199,7 @@ def convert_examples_to_features(examples, model, max_seq_length, special_tokens
                               ))
     return features
 
-def load_and_cache_vocab(data_dir, score_col_name, logger):
+def load_and_cache_vocab(data_dir, score_col_name, l1_col_name, logger):
     vocab_file = os.path.join(data_dir, 'cached_vocab.p')
     # Load vocab from cache
     if os.path.exists(vocab_file):
@@ -208,7 +208,7 @@ def load_and_cache_vocab(data_dir, score_col_name, logger):
 
     # Create tokenizer
     logger.info("Creating vocab from dataset file at %s", data_dir)
-    processor = TSVProcessor(score_col_name)
+    processor = TSVProcessor(score_col_name, l1_col_name)
     examples = processor.get_train_examples(data_dir)
     word_counts = Counter([word for example in examples for word in example.tokens.split(' ')])
     sorted_vocab = ['[PAD]', 'UNK'] + sorted(word_counts, key=word_counts.get, reverse=True)
@@ -217,9 +217,9 @@ def load_and_cache_vocab(data_dir, score_col_name, logger):
     pickle.dump(vocab_to_int, open(vocab_file, 'wb'))
     return vocab_to_int
 
-def load_and_cache_examples(model, data_dir, max_seq_length, special_tokens, score_col_name, logger, vocab=None, tokenizer=None, evaluate=False, test=False, reload=False, scoring_model_type='reg'):
+def load_and_cache_examples(model, data_dir, max_seq_length, special_tokens, score_col_name, l1_col_name, logger, vocab=None, tokenizer=None, evaluate=False, test=False, reload=False, scoring_model_type='reg'):
     assert not (evaluate and test), "Cannot load validation data and test data at the same time."
-    processor = TSVProcessor(score_col_name)
+    processor = TSVProcessor(score_col_name, l1_col_name)
     # Load data features from cache or dataset file
     file_type = 'valid' if evaluate else 'train'
     file_type = 'test'  if test else file_type

@@ -56,6 +56,8 @@ def main():
                         help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
     parser.add_argument("--score_col_name", default=None, type=str, required=True,
                         help="The human score column name.")   
+    parser.add_argument("--l1_col_name", default=None, type=str, required=False,
+                        help="auxilay aspect score column name.")
     ## Other parameters
     parser.add_argument("--scoring_model_type", default="reg", type=str,
                         help="Model for scoring: reg (default) vs. cls (classification)")
@@ -166,10 +168,10 @@ def main():
             grader = bert_model.SpeechGraderModelRoberta(config=config, model_path=args.model_path).to(args.device)
 
         train_data = data.load_and_cache_examples(
-            args.model, args.data_dir, args.max_seq_length, args.special_tokens, args.score_col_name,
+            args.model, args.data_dir, args.max_seq_length, args.special_tokens, args.score_col_name, args.l1_col_name,
             logger, tokenizer=tokenizer, reload=args.overwrite_cache, scoring_model_type=args.scoring_model_type)
         dev_data = data.load_and_cache_examples(
-            args.model, args.data_dir, args.max_seq_length, args.special_tokens, args.score_col_name,
+            args.model, args.data_dir, args.max_seq_length, args.special_tokens, args.score_col_name, args.l1_col_name,
             logger, tokenizer=tokenizer, evaluate=True, reload=args.overwrite_cache, scoring_model_type=args.scoring_model_type)
         trainer = train.Trainer(args, grader, training_objectives, bert_tokenizer=tokenizer)
         trainer.train(train_data, dev_data)
@@ -192,7 +194,7 @@ def main():
             training_objectives = get_auxiliary_objectives(train_args, tokenizer.vocab_size)
             grader = bert_model.SpeechGraderModelRoberta.from_pretrained(args.model_dir, config=config, model_path=train_args.model_path).to(args.device)
         test_data = data.load_and_cache_examples(
-            train_args.model, args.data_dir, train_args.max_seq_length, train_args.special_tokens, args.score_col_name,
+            train_args.model, args.data_dir, train_args.max_seq_length, train_args.special_tokens, args.score_col_name, args.l1_col_name, 
             logger, tokenizer=tokenizer, test=True, reload=args.overwrite_cache, scoring_model_type=train_args.scoring_model_type)
         trainer = train.Trainer(train_args, grader, training_objectives, bert_tokenizer=tokenizer)
         trainer.test(test_data)

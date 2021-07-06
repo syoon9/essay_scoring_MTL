@@ -71,7 +71,7 @@ class SpeechGraderModelBert(BertPreTrainedModel):
         training_objective_predictions = {}
 
         for objective in self.decoder_objectives:
-            input = bert_pooled_output if objective == 'score' else bert_sequence_output
+            input = bert_pooled_output if objective in ['score', 'native_language'] else bert_sequence_output
             decoded_objective = getattr(self, objective + '_decoder')(input)
             decoded_objective = self.score_scaler(decoded_objective) if (objective == 'score' and self.scoring_model_type ==1)  else decoded_objective
             if objective == 'score': 
@@ -79,6 +79,8 @@ class SpeechGraderModelBert(BertPreTrainedModel):
                     training_objective_predictions[objective] = decoded_objective.squeeze()
                 else: # classification
                     training_objective_predictions[objective] = decoded_objective.view(-1, self.scoring_model_type) 
+            elif objective == 'native_language':
+                    training_objective_predictions[objective] = decoded_objective.view(-1, decoded_objective.shape[1]) 
             else:
                  training_objective_predictions[objective] = decoded_objective.view(-1, decoded_objective.shape[2]) 
 
@@ -133,6 +135,8 @@ class SpeechGraderModelRoberta(RobertaPreTrainedModel):
                     training_objective_predictions[objective] = decoded_objective.squeeze()
                 else: # classification
                     training_objective_predictions[objective] = decoded_objective.view(-1, self.scoring_model_type)
+            elif objective == 'native_language':
+                 training_objective_predictions[objective] = decoded_objective.view(-1, decoded_objective.shape[1])
             else:
                  training_objective_predictions[objective] = decoded_objective.view(-1, decoded_objective.shape[2])
 

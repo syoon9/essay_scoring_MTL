@@ -11,7 +11,7 @@ from tqdm import tqdm, trange
 
 from helpers.masked_lm import get_special_tokens_mask, mask_tokens
 from helpers.metrics import get_losses, compute_metrics
-from data import pos_tag_labels, deprel_labels, score_labels
+from data import pos_tag_labels, deprel_labels, score_labels, native_language_labels 
 
 class Trainer:
     def __init__(self, args, grader, training_objectives, bert_tokenizer=None):
@@ -112,8 +112,12 @@ class Trainer:
             all_score_targets = torch.zeros(len(self.eval_data), device=self.args.device)
             all_pos_predictions = []
             all_pos_targets = []
+            all_nl_predictions = []
+            all_nl_targets = []
             pos_label_map = {i:label for i, label in enumerate(pos_tag_labels)}
             score_label_map = {i:label for i, label in enumerate(score_labels)}
+            native_language_label_map = {i:label for i, label in enumerate(native_language_labels)}
+
         total_losses = {}
         for i, batch in enumerate(tqdm(eval_dataloader, desc="Evaluating")):
             start = i * self.args.eval_batch_size
@@ -134,11 +138,19 @@ class Trainer:
                 else: 
                     all_score_predictions[start:end] = predictions['score'].detach()
                 all_score_targets[start:end] = labels['score'].detach()
+                # native language 
+                if 'nl' in scoring_model_type:
+                    system_nl = predictions['native_language'].cpu().data.numpy()
+                    argmax_indices = np.argmax(system_nl, axis=-1)
+                    all_nl_predictions += [x for x in argmax_indices]
+                    all_nl_targets += labels['native_language'].cpu().data.numpy().tolist() 
+                else:
+                     all_nl_predictions = None
+                     all_nl_targets = None
                 # tag
                 if 'tag' in scoring_model_type:
                     system_pos = predictions['pos'].cpu().data.numpy()
                     argmax_indices = np.argmax(system_pos, axis=-1)
-                    #all_pos_predictions += [pos_label_map[x] for x in argmax_indices]
                     all_pos_predictions += [x for x in argmax_indices]
                     all_pos_targets += labels['pos'].cpu().data.numpy().reshape(-1, 1).tolist()
                 else:
@@ -162,7 +174,8 @@ class Trainer:
         total_losses = {objective: loss / nb_eval_steps for objective, loss in total_losses.items()}
         if verbose:
             compute_metrics(total_losses, all_score_predictions, all_score_targets, self.args.device,
-                            all_pos_predictions, all_pos_targets)
+                            all_pos_predictions, all_pos_targets,
+                            all_nl_predictions, all_nl_targets)
         self.args.logger.info("***** Eval results {} *****".format(prefix))
         for key in sorted(total_losses.keys()):
             self.args.logger.info("  %s = %s", key, str(total_losses[key]))

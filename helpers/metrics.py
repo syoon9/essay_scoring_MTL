@@ -22,7 +22,8 @@ def get_losses(training_objectives, training_objective_predictions, labels, devi
     return losses
 
 def compute_metrics(total_losses, all_score_predictions, all_score_targets, device,
-                    all_tag_predictions=None, all_tag_targets=None):
+                    all_tag_predictions=None, all_tag_targets=None,
+                    all_nl_predictions=None, all_nl_targets=None):
     """ Computes Pearson correlation and accuracy within 0.5 and 1 of target score and adds each to total_losses dict. """
     total_losses['pearson'] = stats.pearsonr(all_score_predictions.cpu(), all_score_targets.cpu())[0]
     total_losses['within_0.5'] = _accuracy_within_margin(all_score_predictions, all_score_targets, 0.5,
@@ -30,17 +31,18 @@ def compute_metrics(total_losses, all_score_predictions, all_score_targets, devi
     total_losses['within_1'] = _accuracy_within_margin(all_score_predictions, all_score_targets, 1,
                                                                 device)
     if all_tag_targets:
-        if len(all_tag_targets) != len(all_tag_predictions):
-            print('ERROR IN CALCULATING TAG ACCURACY: PREDICTION AND LABEL LENGTH MISMATCH', len(all_tag_targets), len(all_tag_predictions))
-        else:
-            print('CALCULATING TAG ACCURACY: PREDICTION AND LABEL LENGTH MISMATCH', len(all_tag_targets), len(all_tag_predictions), all_tag_targets[:10], all_tag_predictions[:10])
-            new_targets = []
-            new_preds = []
-            for i,label in enumerate(all_tag_targets):
-                if i != -1:
-                   new_targets.append(label)
-                   new_preds.append(all_tag_predictions[i])
-            total_losses['tag_accuracy'] = metrics.accuracy_score(all_tag_predictions, all_tag_targets)
+        assert len(all_tag_targets) == len(all_tag_predictions)
+        new_targets = []
+        new_preds = []
+        for i,label in enumerate(all_tag_targets):
+            if i != -1:
+                new_targets.append(label)
+                new_preds.append(all_tag_predictions[i])
+        total_losses['tag_accuracy'] = metrics.accuracy_score(all_tag_predictions, all_tag_targets)
+
+    if all_nl_targets:
+        assert len(all_nl_targets) == len(all_nl_predictions)
+        total_losses['nl_accuracy'] = metrics.accuracy_score(all_nl_predictions, all_nl_targets)
 
 def _accuracy_within_margin(score_predictions, score_target, margin, device):
     """ Returns the percentage of predicted scores that are within the provided margin from the target score. """
