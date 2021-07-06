@@ -4,6 +4,7 @@ import os
 
 import torch
 from transformers import BertTokenizer, BertConfig
+from transformers import RobertaTokenizer, RobertaConfig
 
 import data
 import train
@@ -61,7 +62,7 @@ def main():
     parser.add_argument("--model_path", default="bert-base-uncased", type=str,
                         help="Pre-trained BERT model to extend e.g. bert-base-uncased.")
     parser.add_argument("--model", default=None, type=str,
-                        help="Type of speech grader model: ['lstm', 'bert']")
+                        help="Type of speech grader model: ['roberta', 'bert']")
     parser.add_argument("--max_score", default=6, type=float,
                          help="Maximum score that an example can be awarded (the default value used is 6, inline with CEFR levels).")
     parser.add_argument('--special_tokens', default=[], type=str, action='append',
@@ -146,14 +147,22 @@ def main():
         args.logger = logger
 
         if not args.model:
-            args.logger.info("--model must be provided for training (['lstm', 'bert'])")
+            args.logger.info("--model must be provided for training (['bert', 'roberta'])")
             return
-        tokenizer = BertTokenizer.from_pretrained(args.model_path, additional_special_tokens=args.special_tokens)
-        config = BertConfig.from_pretrained(args.model_path)
-        training_objectives = get_auxiliary_objectives(args, tokenizer.vocab_size)
+
         config.training_objectives = training_objectives
         config.max_score = args.max_score
-        grader = bert_model.SpeechGraderModel(config=config, model_path=args.model_path).to(args.device)
+        if args.model=='bert':
+            tokenizer = BertTokenizer.from_pretrained(args.model_path, additional_special_tokens=args.special_tokens)
+            config = BertConfig.from_pretrained(args.model_path)
+            training_objectives = get_auxiliary_objectives(args, tokenizer.vocab_size)
+            grader = bert_model.SpeechGraderModelBert(config=config, model_path=args.model_path).to(args.device)
+        else:
+            tokenizer = RobertaTokenizer.from_pretrained(args.model_path, additional_special_tokens=args.special_tokens)
+            config = RobertaConfig.from_pretrained(args.model_path)
+            training_objectives = get_auxiliary_objectives(args, tokenizer.vocab_size)
+            grader = bert_model.SpeechGraderModelRoberta(config=config, model_path=args.model_path).to(args.device)
+
         train_data = data.load_and_cache_examples(
             args.model, args.data_dir, args.max_seq_length, args.special_tokens, args.score_col_name,
             logger, tokenizer=tokenizer, reload=args.overwrite_cache, scoring_model_type=args.scoring_model_type)
@@ -170,10 +179,16 @@ def main():
         train_args = torch.load(os.path.join(args.model_args_dir, 'training_args.bin'))
         train_args.predictions_file = args.predictions_file
         train_args.logger = logger
-        tokenizer = BertTokenizer.from_pretrained(args.model_dir, do_lower_case=True)
-        training_objectives = get_auxiliary_objectives(train_args, tokenizer.vocab_size)
-        config = BertConfig.from_pretrained(args.model_dir)
-        grader = bert_model.SpeechGraderModel.from_pretrained(args.model_dir, config=config, model_path=train_args.model_path).to(args.device)
+        if train_args.model=='bert':
+            tokenizer = BertTokenizer.from_pretrained(args.model_dir, do_lower_case=True)
+            config = BertConfig.from_pretrained(args.model_dir)
+            training_objectives = get_auxiliary_objectives(train_args, tokenizer.vocab_size)
+            grader = bert_model.SpeechGraderModelBert.from_pretrained(args.model_dir, config=config, model_path=train_args.model_path).to(args.device)
+        else:
+            tokenizer = RobertaTokenizer.from_pretrained(args.model_dir)
+            config = RobertaConfig.from_pretrained(args.model_dir)
+            training_objectives = get_auxiliary_objectives(train_args, tokenizer.vocab_size)
+            grader = bert_model.SpeechGraderModelRoberta.from_pretrained(args.model_dir, config=config, model_path=train_args.model_path).to(args.device)
         test_data = data.load_and_cache_examples(
             train_args.model, args.data_dir, train_args.max_seq_length, train_args.special_tokens, args.score_col_name,
             logger, tokenizer=tokenizer, test=True, reload=args.overwrite_cache, scoring_model_type=train_args.scoring_model_type)
